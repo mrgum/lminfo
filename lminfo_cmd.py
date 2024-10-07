@@ -1,9 +1,8 @@
-'''
-Command line 'lminfo' tool.
-'''
+#!/usr/bin/env python
+
+"""lminfo tool."""
 
 import argparse
-import os
 import sys
 import textwrap
 
@@ -15,33 +14,28 @@ class FlexlmError(Exception):
 
 
 class App(object):
-    '''
-    Application object, implements a command-line application for the
-    'lminfo' command.
-    '''
+    """ Application object, implements a command-line application for the 'lminfo' command. """
 
     def parse_args(self):
-        '''
-        Parse command line arguments, setup and provide --help text
-        '''
+        """ Parse command line arguments, setup and provide --help text """
         desc = """\
         This tool gets Flexlm license usage data, and prints it out in a human-
         and/or machine-readable format.
         """
         desc = textwrap.dedent(desc)
 
-        #epilog = """\
-        #    Some extra text to go after the options help (usually examples)
-        #"""
-        #epilog = textwrap.dedent(epilog)
+        # epilog = """\
+        #     Some extra text to go after the options help (usually examples)
+        # """
+        # epilog = textwrap.dedent(epilog)
 
         parser = argparse.ArgumentParser(
                  description=desc,
-                 #epilog=epilog,
+                 # epilog=epilog,
                  formatter_class=argparse.RawDescriptionHelpFormatter)
 
         def paa(*name, **otherargs):
-            '''Wraps add_argument, allows ---opt shorthand for -opt and --opt'''
+            """ Wraps add_argument, allows ---opt shorthand for -opt and --opt """
             sad_opts = [x.replace('---','-') for x in name if x.startswith('---')]
             sd2_opts = ['-'+x for x in sad_opts]
             reg_opts = [x for x in name if not x.startswith('---')]
@@ -59,11 +53,8 @@ class App(object):
 
         return parser.parse_args()
 
-
     def run(self):
-        '''
-        Implements lminfo command to print AWS configs and/or run commands.
-        '''
+        """ Implements lminfo command to print license usage. """
         args = self.parse_args()
 
         flexlmp = ParseFlexlm(
@@ -71,18 +62,15 @@ class App(object):
                       output=args.output,
                       verbose=args.verbose,
                   )
-        print flexlmp.get_license_info()
+        print(flexlmp.get_license_info())
         sys.exit(0)
 
-
     def main(self):
-        '''
-        Runs the application, catches exceptions and returns exit status
-        '''
+        """ Runs the application, catches exceptions and returns exit status """
         try:
             self.run()
-        except (FlexlmError), err:
-            print "lminfo: error, %s" % err
+        except (FlexlmError) as err:
+            print(f"lminfo: error, {err}")
             sys.exit(1)
 
 

@@ -1,6 +1,6 @@
-'''
+"""
 Module to implement Flexlm Parser.
-'''
+"""
 
 import json
 import os
@@ -8,18 +8,20 @@ import re
 import sys
 import time
 
+
 class FlexlmError(Exception):
-    ''' Minimal class to distinguish "expected" vs "unexpected" exceptions '''
+    """ Minimal class to distinguish "expected" vs "unexpected" exceptions """
     pass
+
 
 class ParseFlexlm(object):
 
-    '''
+    """
     This class implements a Flexlm license data parser. Flexlm has a single
     utility to manage and introspect license data and usage, which dumps data
     as text, but in a non-machine-readable and barely-human-readable format.
     The parser converts this into a well-structured json block.
-    '''
+    """
 
     def __init__(self, licfile='./flexlm.lic', output='json', verbose=True):
 
@@ -33,29 +35,30 @@ class ParseFlexlm(object):
 
 
     def get_license_info(self, licfile=None):
-        '''
+        """
         Gets license and usage data from Flexlm server, and returns machine-
         readable json data block.
-        '''
+        """
         if licfile is None:
             licfile = self.licfile
-        raw_text = self._get_raw_license_text(licfile)
+        # raw_text = self._get_raw_license_text(licfile)
+        raw_text = self._get_text_from_file(licfile)
+        print(raw_text)
         (raw_sum, raw_det) = self._preprocess(raw_text)
         self._process_summary(raw_sum)
         self._process_details(raw_det)
         return json.dumps(self.lminfo, indent=4)
 
-
     def _get_raw_license_text(self, licfile):
-        '''
+        """
         Runs the 'lmutil lmstat' command to query the license server, and
         returns the resulting raw text data from stdout.
-        '''
+        """
         cmd = './lmutil lmstat -c %s -a -i 2>&1' % (licfile)
         # NOTE: '2>&1' gets stderr output in bash and cmd.exe shells
 
         if self.verbose:
-            print >> sys.stderr, "running command: %s" % cmd
+            print(f"running command: {cmd}", file=sys.stderr)
         pipe = os.popen(cmd)
         data = pipe.read()
         stat = pipe.close()
@@ -66,9 +69,12 @@ class ParseFlexlm(object):
         else:
             return data
 
+    def _get_text_from_file(self, file):
+        with open(file, 'r') as f:
+            return f.read()
 
     def _preprocess(self, raw_text):
-        '''
+        """
         Performs preprocess on raw text data, splits text lines into 'summary',
         and 'details' sections.  The summary section must be parsed first, but
         appears at the end of the 'lmutil lmstat' output.  Summary contains
@@ -76,7 +82,7 @@ class ParseFlexlm(object):
         licenses being used.
 
         Returns (summary, details) tuple of text lines.
-        '''
+        """
 
         # Implement simple linear state machine to parse flexlm data sections
         # states are: init -> feature_usage_info -> feature_summary_info
@@ -97,7 +103,7 @@ class ParseFlexlm(object):
 
             elif current_state == "feature_usage_info":
 
-                if words == "Feature Version #licenses Expires Vendor".split():
+                if words == "Feature Version # licenses Vendor Expires".split():
                     current_state = "feature_summary_header"
                 else:
                     details_lines.append(line)
@@ -105,7 +111,7 @@ class ParseFlexlm(object):
             elif current_state == "feature_summary_header":
 
                 if words == "_______ _________ _________ __________ ______".split():
-                    #NOTE: this conditional is not future-proof (there have been
+                    # NOTE: this conditional is not future-proof (there have been
                     #      changes in the separator line between versions).
                     current_state = "feature_summary_info"
 
@@ -123,7 +129,7 @@ class ParseFlexlm(object):
 
 
     def _process_summary(self, raw_sum):
-        '''
+        """
         Processes summary raw text data, extracting the fields listed below for
         each Flexlm license 'feature'.
 
@@ -131,7 +137,7 @@ class ParseFlexlm(object):
             Initializes self.lminfo as a list of dict, each element containing
             the following key/values: feature, version, ntotal, nused=0,
             expires, vendor, usage=[].
-        '''
+        """
         for line in raw_sum:
 
             words = re.split(r'\s+', line)
@@ -170,7 +176,7 @@ class ParseFlexlm(object):
 
 
     def _process_details(self, raw_det):
-        '''
+        """
         Processes detailed raw text data, adds usage information to 'lminfo'
         initialized by _process_summary().
 
@@ -179,7 +185,7 @@ class ParseFlexlm(object):
             usage is found.  The usage value itself is a list of dict, wich
             with each element containing the following key/values: userid,
             host, pid, sw_version, lm_version, start.
-        '''
+        """
 
         # Process the details text info, extract per-feature usage info.
         # The text lines appear in a 3-level hierarchy: feature/version/usage
@@ -194,28 +200,30 @@ class ParseFlexlm(object):
             if match:
 
                 current_feature = match.group(1)
-                #current_total = match.group(2)
-                #current_used = match.group(3)
+                # current_total = match.group(2)
+                # current_used = match.group(3)
                 continue
 
             # Looking for lines like:
             # "85527MAYAF" v1.000, vendor: adskflex, expiry: 1-jan-0
             if (len(words) == 6) and (words[2] == "vendor:"):
 
-                #redundant_feature_name = words[0]
+                # redundant_feature_name = words[0]
                 current_version = words[1].strip('v,')
-                #current_vendor = words[3]
+                # current_vendor = words[3]
 
                 current_feature_uniq = current_feature + "_" + current_version
 
-                #NOTE: Only needed if summary is missing features,
-                #NOTE: does this ever happen?
+                if current_feature_uniq not in self.lminfo:
+                    self.lminfo[current_feature_uniq] = {}
+                # NOTE: Only needed if summary is missing features,
+                # NOTE: does this ever happen?
                 if 'usage' not in self.lminfo[current_feature_uniq]:
                     self.lminfo[current_feature_uniq]['usage'] = []
                 continue
 
 
-            #pylint: disable=line-too-long
+            # pylint: disable=line-too-long
             # Looking for lines like:
             # "someguy ahost ahost (v1.000) (imdlic01/7111 7581), start Wed 9/12 9:08",
             #
@@ -257,11 +265,13 @@ class ParseFlexlm(object):
                 usage_entry = dict(userid=userid, host=host, pid=pid,
                                    start=start, sw_version=ver, lm_version=current_version)
                 self.lminfo[current_feature_uniq]['usage'].append(usage_entry)
-                self.lminfo[current_feature_uniq]['nused'] += 1
+                if 'nused' in self.lminfo[current_feature_uniq]:
+                    self.lminfo[current_feature_uniq]['nused'] += 1
+                else:
+                    self.lminfo[current_feature_uniq]['nused'] = 1
 
 
-
-####### Global time conversion functions
+# ## ## ## Global time conversion functions
 
 # NOTE: Hungarian Notation previx for time values & strings, used in the
 #       subsequent time-processing functions.
@@ -270,17 +280,17 @@ class ParseFlexlm(object):
 # tv = "Time Value", time value array, e.g. (2008, 6, 10, 10, 5, 53, 1, 162, 1)
 
 def convert_expiration_date(exp_date):
-    '''
+    """
     Converts Flexlm, PixarAdmin, Sesi expiration date format to the far more
     useful human-readable and machine-sortable 'ts' time string format.
     Accepts "dd-mmm-yyyy" and produces "YYYY-MM-DD HH:MM"
     Example "1-oct-2007" => "2007-10-01 23:59"
     (assumes exact expiration time is midnight on expiration date)
-    '''
+    """
     try:
         tv_exp = time.strptime(exp_date+" 23:59", "%d-%b-%Y %H:%M")
         ts_out = time.strftime("%Y-%m-%d %H:%M", tv_exp)
-    #except ValueError:
+    # except ValueError:
     # pylint: disable=broad-except
     #
     except Exception:
@@ -293,19 +303,19 @@ def convert_expiration_date(exp_date):
 
 
 def flexlm_start_date_to_ts(mmdd, hhmm):
-    '''
+    """
     Converts Flexlm start date format to the far more useful human-readable and
     machine-sortable 'ts' time string format.
 
     Accepts "mm/dd hh:mm" and produces "YYYY-MM-DD HH:MM"
     Example "9/13 12:51" => "2007-09-13 12:51"
-    '''
+    """
     try:
         yyyy = time.strftime("%Y", time.localtime())
         tv_start = time.strptime(mmdd+"/"+yyyy+" "+hhmm, "%m/%d/%Y %H:%M")
         tv_start = adjust_year(tv_start, yyyy)
         ts_out = time.strftime("%Y-%m-%d %H:%M (%a)", tv_start)
-    #except ValueError:
+    # except ValueError:
     # pylint: disable=broad-except
     except Exception:
         ts_out = "xxxx-xx-xx xx:xx (BAD DATE)"
@@ -314,12 +324,12 @@ def flexlm_start_date_to_ts(mmdd, hhmm):
 
 
 def adjust_year(tv_start, yyyy):
-    '''
+    """
     License manager start dates do not include a year number, so we assume the
     current year. This leads to a potential year rollover problem, e.g. when a
     license is checked out in December but still out in January. We fix it by
     checking if the month > current month, and decrementing the year if needed.
-    '''
+    """
     tv_adjusted = tv_start
     input_month = time.strftime("%m", tv_start)
     curr_month = time.strftime("%m", time.localtime())
